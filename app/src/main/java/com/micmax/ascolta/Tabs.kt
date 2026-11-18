@@ -78,13 +78,13 @@ fun MainActivity.buildHomeTab(): View {
         val last = lastStation()
         val q = AudioQueue.list(this)
         if (recent.isNotEmpty() || last != null || q.isNotEmpty()) sectionLabel(body, "CONTINUA")
-        recent.forEach { e -> listRow(body, "🎙", e.title, episodeSub(this, e)) { playEpisode(e) } }
-        last?.let { s -> listRow(body, "📻", s.name, "Ultima radio ascoltata") { playStation(s) } }
+        recent.forEach { e -> listRow(body, "🎙", e.title, episodeSub(this, e), image = e.artwork) { playEpisode(e) } }
+        last?.let { s -> listRow(body, "📻", s.name, "Ultima radio ascoltata", image = s.favicon) { playStation(s) } }
         if (q.isNotEmpty()) listRow(body, "📋", "Coda · ${q.size}", "Si ascoltano una dopo l'altra") { openQueue() }
         val eps = repo.cachedEpisodes().filter { !AudioStore.isFinished(this, it.id) }.take(8)
         if (eps.isNotEmpty()) {
             sectionLabel(body, "NUOVE PUNTATE")
-            eps.forEach { e -> listRow(body, "🎙", e.title, episodeSub(this, e), { episodeMenu(e) }) { playEpisode(e) } }
+            eps.forEach { e -> listRow(body, "🎙", e.title, episodeSub(this, e), { episodeMenu(e) }, image = e.artwork) { playEpisode(e) } }
         }
         if (repo.subscriptions().isNotEmpty()) listRow(body, "🔄", "Aggiorna le puntate", "Cerca le novità dei podcast che segui") {
             toast("Cerco le novità…"); io.execute { repo.refreshEpisodes(); runOnUiThread { render() } }
@@ -153,7 +153,7 @@ fun MainActivity.buildPodcastTab(): View {
         }
         sectionLabel(body, "CHE SEGUI · ${subs.size}")
         subs.sortedBy { it.title.lowercase() }.forEach { p ->
-            listRow(body, "🎙", p.title, p.author.ifBlank { null }, { MaterialAlertDialogBuilder(this).setTitle(p.title).setItems(arrayOf("Non seguire più")) { _, _ -> repo.unsubscribe(p.feedUrl); render() }.show() }) { openPodcast(p) }
+            listRow(body, "🎙", p.title, p.author.ifBlank { null }, { MaterialAlertDialogBuilder(this).setTitle(p.title).setItems(arrayOf("Non seguire più")) { _, _ -> repo.unsubscribe(p.feedUrl); render() }.show() }, image = p.artwork) { openPodcast(p) }
         }
     }
     refreshPodcasts = { render() }
@@ -166,11 +166,21 @@ fun MainActivity.openPodcast(p: Podcast) {
         fun render(eps: List<Episode>?) {
             body.removeAllViews()
             val subscribed = repo.isSubscribed(p.feedUrl)
-            body.addView(MaterialButton(this, null, if (subscribed) com.google.android.material.R.attr.materialButtonOutlinedStyle else com.google.android.material.R.attr.materialButtonStyle).apply {
+            val headRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(4), 0, dp(10)) }
+            headRow.addView(FrameLayout(this).apply {
+                background = roundBg(col(R.color.icbg), 18); clipToOutline = true
+                addView(TextView(this@openPodcast).apply { text = "🎙"; textSize = 40f; gravity = Gravity.CENTER }, FrameLayout.LayoutParams(-1, -1))
+                (p.artwork ?: eps?.firstOrNull()?.artwork)?.let { u -> addView(android.widget.ImageView(this@openPodcast).apply { scaleType = android.widget.ImageView.ScaleType.CENTER_CROP; Img.load(u, this) }, FrameLayout.LayoutParams(-1, -1)) }
+            }, LinearLayout.LayoutParams(dp(110), dp(110)).apply { marginEnd = dp(14) })
+            val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            info.addView(TextView(this).apply { text = p.title; textSize = 19f; setTypeface(typeface, android.graphics.Typeface.BOLD); setTextColor(col(R.color.text)); maxLines = 3 })
+            if (p.author.isNotBlank()) info.addView(TextView(this).apply { text = p.author; textSize = 13.5f; setTextColor(col(R.color.muted)); setPadding(0, dp(2), 0, dp(8)) })
+            info.addView(MaterialButton(this, null, if (subscribed) com.google.android.material.R.attr.materialButtonOutlinedStyle else com.google.android.material.R.attr.materialButtonStyle).apply {
                 text = if (subscribed) "✓ Lo segui" else "＋ Segui"; isAllCaps = false
                 setOnClickListener { if (subscribed) repo.unsubscribe(p.feedUrl) else repo.subscribe(p); toast(if (subscribed) "Non lo segui più" else "Lo segui"); render(eps); refreshPodcasts?.invoke() }
             })
-            if (p.author.isNotBlank()) hintLabel(body, p.author)
+            headRow.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
+            body.addView(headRow)
             val o = PodcastPrefs.get(this, p.feedUrl)
             listRow(body, "⚡", "Velocità di questo podcast", if (o.speed > 0) "${o.speed}×" else "Come la velocità generale") {
                 val speeds = floatArrayOf(0f, 0.8f, 1f, 1.25f, 1.5f, 1.75f, 2f)
@@ -181,7 +191,7 @@ fun MainActivity.openPodcast(p: Podcast) {
             sectionLabel(body, "PUNTATE")
             eps.take(40).forEach { e ->
                 val d = if (repo.isDownloaded(e)) "⬇ " else ""
-                listRow(body, if (AudioStore.isFinished(this, e.id)) "✓" else "🎙", e.title, d + episodeSub(this, e).removePrefix(e.podcastTitle + " · "), { episodeMenu(e) }) { playEpisode(e) }
+                listRow(body, if (AudioStore.isFinished(this, e.id)) "✓" else "🎙", e.title, d + episodeSub(this, e).removePrefix(e.podcastTitle + " · "), { episodeMenu(e) }, image = e.artwork ?: p.artwork) { playEpisode(e) }
             }
             hintLabel(body, "Tieni premuta una puntata per ascoltarla dopo, scaricarla o segnarla come ascoltata.")
         }
@@ -206,7 +216,7 @@ fun MainActivity.openPodcastSearch() {
                     when {
                         list == null -> hintLabel(results, "Non riesco a cercare: controlla la connessione.")
                         list.isEmpty() -> hintLabel(results, "Nessun podcast trovato per «$q».")
-                        else -> list.forEach { p -> listRow(results, "🎙", p.title, p.author.ifBlank { null }) { openPodcast(p) } }
+                        else -> list.forEach { p -> listRow(results, "🎙", p.title, p.author.ifBlank { null }, image = p.artwork) { openPodcast(p) } }
                     }
                 }
             }
@@ -224,7 +234,7 @@ fun MainActivity.openQueue() {
             if (q.isEmpty()) { hintLabel(body, "La coda è vuota. Tieni premuta una puntata e scegli «Ascolta dopo»."); return }
             q.forEachIndexed { i, e ->
                 listRow(body, "${i + 1}", e.title, e.podcastTitle, { MaterialAlertDialogBuilder(this).setItems(arrayOf("⬆ Sposta su", "⬇ Sposta giù")) { _, w -> AudioQueue.move(this, e.id, w == 0); render() }.show() },
-                    { AudioQueue.remove(this, e.id); render() }) { AudioQueue.remove(this, e.id); playEpisode(e); render() }
+                    { AudioQueue.remove(this, e.id); render() }, image = e.artwork) { AudioQueue.remove(this, e.id); playEpisode(e); render() }
             }
         }
         scr.refresh = { render() }
@@ -244,7 +254,7 @@ fun MainActivity.buildRadioTab(): View {
         val favs = repo.favoriteStations()
         if (favs.isNotEmpty()) {
             sectionLabel(body, "PREFERITE")
-            favs.forEach { s -> listRow(body, "⭐", s.name, listOf(s.state, s.tags.split(',').firstOrNull().orEmpty()).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null }, { stationMenu(s) }) { playStation(s) } }
+            favs.forEach { s -> listRow(body, "⭐", s.name, listOf(s.state, s.tags.split(',').firstOrNull().orEmpty()).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null }, { stationMenu(s) }, image = s.favicon) { playStation(s) } }
         }
         sectionLabel(body, "SCOPRI")
         listRow(body, "🇮🇹", "Le più ascoltate in Italia", null) { openStations("Radio in Italia") { repo.nationalStations() } }
@@ -276,7 +286,7 @@ fun MainActivity.openStations(title: String, load: () -> List<RadioStation>) {
             runOnUiThread {
                 body.removeAllViews()
                 if (list.isEmpty()) hintLabel(body, "Non trovo radio: controlla la connessione.")
-                list.forEach { s -> listRow(body, "📻", s.name, listOf(s.state, s.tags.split(',').firstOrNull().orEmpty(), if (s.bitrate > 0) "${s.bitrate} kbps" else "").filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null }, { stationMenu(s) }) { playStation(s) } }
+                list.forEach { s -> listRow(body, "📻", s.name, listOf(s.state, s.tags.split(',').firstOrNull().orEmpty(), if (s.bitrate > 0) "${s.bitrate} kbps" else "").filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null }, { stationMenu(s) }, image = s.favicon) { playStation(s) } }
                 if (list.isNotEmpty()) hintLabel(body, "Tieni premuta una radio per metterla tra le preferite.")
             }
         }
@@ -296,7 +306,7 @@ fun MainActivity.openStationSearch() {
                 runOnUiThread {
                     results.removeAllViews()
                     if (list.isEmpty()) hintLabel(results, "Nessuna radio trovata per «$q».")
-                    list.forEach { s -> listRow(results, "📻", s.name, s.state.ifBlank { null }, { stationMenu(s) }) { playStation(s) } }
+                    list.forEach { s -> listRow(results, "📻", s.name, s.state.ifBlank { null }, { stationMenu(s) }, image = s.favicon) { playStation(s) } }
                 }
             }
         }

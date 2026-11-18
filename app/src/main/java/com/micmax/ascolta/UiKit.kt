@@ -29,7 +29,7 @@ fun Context.hintLabel(parent: LinearLayout, text: String) {
 }
 
 /** A white card row: round icon, title, small line, tap. */
-fun Context.listRow(parent: LinearLayout, icon: String, title: String, sub: String?, onLong: (() -> Unit)? = null, onRemove: (() -> Unit)? = null, onClick: () -> Unit): View {
+fun Context.listRow(parent: LinearLayout, icon: String, title: String, sub: String?, onLong: (() -> Unit)? = null, onRemove: (() -> Unit)? = null, image: String? = null, onClick: () -> Unit): View {
     val r = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         background = roundBg(col(R.color.card), 16, col(R.color.stroke)); setPadding(dp(12), dp(10), dp(12), dp(10))
@@ -37,10 +37,10 @@ fun Context.listRow(parent: LinearLayout, icon: String, title: String, sub: Stri
         isClickable = true; setOnClickListener { onClick() }
         if (onLong != null) setOnLongClickListener { onLong(); true }
     }
-    r.addView(TextView(this).apply {
-        text = icon; textSize = 21f; gravity = Gravity.CENTER; background = roundBg(col(R.color.icbg), 12)
-        layoutParams = LinearLayout.LayoutParams(dp(42), dp(42)).apply { marginEnd = dp(12) }
-    })
+    val iconBox = android.widget.FrameLayout(this).apply { background = roundBg(col(R.color.icbg), 12); clipToOutline = true }
+    iconBox.addView(TextView(this).apply { text = icon; textSize = 21f; gravity = Gravity.CENTER }, android.widget.FrameLayout.LayoutParams(-1, -1))
+    if (!image.isNullOrBlank()) iconBox.addView(android.widget.ImageView(this).apply { scaleType = android.widget.ImageView.ScaleType.CENTER_CROP; Img.load(image, this) }, android.widget.FrameLayout.LayoutParams(-1, -1))
+    r.addView(iconBox, LinearLayout.LayoutParams(dp(46), dp(46)).apply { marginEnd = dp(12) })
     val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
     col.addView(TextView(this).apply { text = title; textSize = 15.5f; setTextColor(col(R.color.text)); setTypeface(typeface, android.graphics.Typeface.BOLD); maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END })
     if (!sub.isNullOrBlank()) col.addView(TextView(this).apply { text = sub; textSize = 12.5f; setTextColor(col(R.color.muted)) })

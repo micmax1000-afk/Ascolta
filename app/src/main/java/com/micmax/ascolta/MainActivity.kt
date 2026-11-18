@@ -192,7 +192,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Titolo, sottotitolo e copertina di quello che suona. */
     fun nowInfo(): Triple<String, String, String?>? = when (active) {
-        "web" -> if (webState.has) Triple(webState.title, webState.artist.ifBlank { "YouTube Music" }, webState.art.ifBlank { null }) else null
+        "web" -> if (webState.has || webState.playing) Triple(webState.title.ifBlank { "In riproduzione" }, webState.artist.ifBlank { "YouTube Music" }, webState.art.ifBlank { null }) else null
         "exo" -> ctl?.takeIf { it.mediaItemCount > 0 }?.mediaMetadata?.let { Triple(it.title?.toString().orEmpty(), it.artist?.toString().orEmpty(), it.artworkUri?.toString()) }
         else -> null
     }

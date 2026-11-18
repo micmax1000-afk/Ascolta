@@ -101,14 +101,23 @@ object MusicWeb {
     if (promo && promo.offsetParent !== null) { lastNag = now; promo.click(); }
   }
 
+  function txt(sel, root) { try { var e = (root || document).querySelector(sel); return e ? (e.textContent || '').replace(/\s+/g, ' ').trim() : ''; } catch (e) { return ''; } }
+  function cleanTitle(s) { return (s || '').replace(/\s*[|\-–]\s*YouTube Music\s*$/i, '').replace(/^YouTube Music$/i, '').trim(); }
+  function videoId() { var m = location.search.match(/[?&]v=([\w-]{11})/); return m ? m[1] : ''; }
   function meta() {
     var t = '', a = '', art = '';
     try {
       var m = navigator.mediaSession && navigator.mediaSession.metadata;
       if (m) { t = m.title || ''; a = m.artist || ''; var im = m.artwork || []; if (im.length) art = im[im.length - 1].src || ''; }
     } catch (e) {}
-    if (!t) t = (document.title || '').replace(/ - YouTube Music$/, '');
-    return { t: t, a: a, art: art };
+    var bar = document.querySelector('ytmusic-player-bar');
+    if (!t) t = txt('.title', bar) || txt('.song-title') || txt('.title.ytmusic-player-bar');
+    if (!a) { var by = txt('.byline', bar) || txt('.subtitle .byline', bar) || txt('.byline.ytmusic-player-bar') || txt('.subtitle'); if (by) a = by.split(/\s[•·]\s/)[0].trim(); }
+    if (!art) { try { var img = document.querySelector('ytmusic-player-bar img.image, ytmusic-player-bar #thumbnail img, ytmusic-player-bar img'); if (img && img.src && img.src.indexOf('http') === 0) art = img.src; } catch (e) {} }
+    if (!t) t = cleanTitle(document.title);
+    var id = videoId();
+    if (!art && id) art = 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg';
+    return { t: cleanTitle(t), a: a, art: art };
   }
   var last = '';
   function report() {
