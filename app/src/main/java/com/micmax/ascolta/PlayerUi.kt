@@ -111,11 +111,12 @@ fun MainActivity.openPlayer() {
     body.addView(lyricsBox, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14) })
 
     var lastKey = ""; var lines: List<Lyrics.Line> = emptyList(); var lineViews: List<TextView> = emptyList(); var activeLine = -2
-    var dragging = false; var draggingVol = false; var showLyrics = true; var lyricsLoaded = false
+    var dragging = false; var draggingVol = false; var showLyrics = false; var lyricsLoaded = false
     fun station(): RadioStation? = if (active == "exo" && ctl?.currentMediaItem?.mediaId?.startsWith("radio:") == true) lastStation() else null
     fun updateHeart() { val s = station(); heart.visibility = if (s != null) View.VISIBLE else View.GONE; if (s != null) heart.setImageResource(if (repo.favoriteStations().any { it.id == s.id }) R.drawable.ic_heart_on else R.drawable.ic_heart) }
     heart.setOnClickListener { station()?.let { s -> val on = repo.toggleFavorite(s); toast(if (on) "⭐ Radio preferita" else "Tolta dai preferiti"); updateHeart(); refreshRadio?.invoke(); refreshHome?.invoke() } }
 
+    lateinit var loadLyrics: (String, String, Long) -> Unit
     fun pill(text: String, f: () -> Unit) = TextView(this).apply {
         this.text = text; textSize = 13.5f; maxLines = 1; isSingleLine = true; setTextColor(white); setTypeface(typeface, android.graphics.Typeface.BOLD); background = roundBg(0x40FFFFFF, 20); setPadding(dp(14), dp(10), dp(14), dp(10)); setOnClickListener { f() }
         layoutParams = LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(4); marginEnd = dp(4) }
@@ -133,7 +134,12 @@ fun MainActivity.openPlayer() {
                     buildChips()
                 }.show()
             })
-        } else chips.addView(pill(if (showLyrics) "📝 Testo ✓" else "📝 Testo") { showLyrics = !showLyrics; lyricsBox.visibility = if (showLyrics && lyricsLoaded) View.VISIBLE else View.GONE; buildChips() })
+        } else chips.addView(pill(if (showLyrics) "📝 Nascondi il testo" else "📝 Testo") {
+            showLyrics = !showLyrics
+            if (showLyrics && !lyricsLoaded) nowInfo()?.let { loadLyrics(it.first, it.second, webState.durMs / 1000) }
+            lyricsBox.visibility = if (showLyrics && lyricsLoaded) View.VISIBLE else View.GONE
+            buildChips()
+        })
         chips.addView(pill(if (sleepAt > 0) "⏲ ${((sleepAt - System.currentTimeMillis()) / 60000 + 1)} min" else "⏲ Timer") {
             val opts = mutableListOf("15 minuti" to 15, "30 minuti" to 30, "45 minuti" to 45, "1 ora" to 60, "1 ora e mezza" to 90)
             val dur = ctl?.duration ?: C.TIME_UNSET
@@ -144,7 +150,7 @@ fun MainActivity.openPlayer() {
         chips.addView(pill("📋 Coda") { openQueue() })
     }
 
-    fun loadLyrics(t: String, a: String, durSec: Long) {
+    loadLyrics = { t: String, a: String, durSec: Long ->
         lyricsBox.removeAllViews(); lines = emptyList(); lineViews = emptyList(); activeLine = -2; lyricsLoaded = true
         lyricsBox.visibility = if (showLyrics) View.VISIBLE else View.GONE
         lyricsBox.addView(TextView(this).apply { text = "Cerco il testo…"; textSize = 13f; setTextColor(soft) })
@@ -178,7 +184,8 @@ fun MainActivity.openPlayer() {
             if (info.third != null) Img.load(info.third!!, art)
             buildChips(); updateHeart()
             lyricsBox.removeAllViews(); lines = emptyList(); lineViews = emptyList(); lyricsLoaded = false; lyricsBox.visibility = View.GONE
-            if (web && info.first.isNotBlank()) loadLyrics(info.first, info.second, webState.durMs / 1000)
+            // il testo si cerca solo se l'hai chiesto (pulsante «Testo»); cambiando brano lo cerca di nuovo
+            if (web && showLyrics && info.first.isNotBlank()) loadLyrics(info.first, info.second, webState.durMs / 1000)
         }
         play.setImageResource(if (isPlayingNow()) R.drawable.ic_pause else R.drawable.ic_play)
         back.visibility = if (web) View.INVISIBLE else View.VISIBLE; fwd.visibility = if (web) View.INVISIBLE else View.VISIBLE

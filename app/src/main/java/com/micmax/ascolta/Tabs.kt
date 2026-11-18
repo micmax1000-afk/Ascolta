@@ -149,16 +149,49 @@ fun MainActivity.buildPodcastTab(): View {
             hintLabel(body, "Non segui ancora nessun podcast.")
             listRow(body, "🔍", "Cerca un podcast", "Per nome o argomento") { openPodcastSearch() }
             listRow(body, "📥", "Importa da un file OPML", "Il file con l'elenco dei tuoi podcast (anche da Web Launcher)") { importOpml() }
+            categoryGrid(body)
             return
         }
         sectionLabel(body, "CHE SEGUI · ${subs.size}")
         subs.sortedBy { it.title.lowercase() }.forEach { p ->
             listRow(body, "🎙", p.title, p.author.ifBlank { null }, { MaterialAlertDialogBuilder(this).setTitle(p.title).setItems(arrayOf("Non seguire più")) { _, _ -> repo.unsubscribe(p.feedUrl); render() }.show() }, image = p.artwork) { openPodcast(p) }
         }
+        categoryGrid(body)
     }
     refreshPodcasts = { render() }
     render()
     return root
+}
+
+/** Le categorie dei podcast, due per riga. */
+private fun MainActivity.categoryGrid(body: LinearLayout) {
+    sectionLabel(body, "CATEGORIE")
+    val grid = android.widget.GridLayout(this).apply { columnCount = 2 }
+    AudioRepository.CATEGORIES.forEach { (emoji, name, code) ->
+        grid.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; background = roundBg(col(R.color.card), 16, col(R.color.stroke)); setPadding(dp(12), dp(14), dp(8), dp(14))
+            addView(TextView(this@categoryGrid).apply { text = emoji; textSize = 20f }, LinearLayout.LayoutParams(dp(34), -2))
+            addView(TextView(this@categoryGrid).apply { text = name; textSize = 14.5f; setTextColor(col(R.color.text)); setTypeface(typeface, android.graphics.Typeface.BOLD); maxLines = 2 })
+            setOnClickListener { openPodcastList("$emoji $name") { repo.topByGenre(code.first, code.second) } }
+        }, android.widget.GridLayout.LayoutParams().apply { width = 0; columnSpec = android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f); setMargins(dp(4), dp(4), dp(4), dp(4)) })
+    }
+    body.addView(grid)
+}
+
+/** Un elenco di podcast caricato da internet (categoria). */
+fun MainActivity.openPodcastList(title: String, load: () -> List<Podcast>) {
+    openScreen(title) { body, _ ->
+        hintLabel(body, "Cerco i podcast…")
+        io.execute {
+            val list = runCatching { load() }.getOrDefault(emptyList())
+            runOnUiThread {
+                body.removeAllViews()
+                if (list.isEmpty()) hintLabel(body, "Non trovo podcast: controlla la connessione.")
+                else hintLabel(body, "I più ascoltati in Italia. Tocca un podcast per vedere le puntate e seguirlo.")
+                list.forEachIndexed { i, p -> listRow(body, "${i + 1}", p.title, p.author.ifBlank { null }, image = p.artwork) { openPodcast(p) } }
+            }
+        }
+    }
 }
 
 fun MainActivity.openPodcast(p: Podcast) {
