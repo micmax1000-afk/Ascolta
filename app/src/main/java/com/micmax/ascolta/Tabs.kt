@@ -101,6 +101,10 @@ fun MainActivity.buildHomeTab(): View {
     return root
 }
 
+internal fun MainActivity.lastStation(): RadioStation? = runCatching {
+    com.google.gson.Gson().fromJson(getSharedPreferences("ascolta", android.content.Context.MODE_PRIVATE).getString("last_station", null), RadioStation::class.java)
+}.getOrNull()
+
 /** Menu di una puntata: ascolta dopo, scarica, segna come ascoltata. */
 fun MainActivity.episodeMenu(e: Episode) {
     val downloaded = repo.isDownloaded(e)
