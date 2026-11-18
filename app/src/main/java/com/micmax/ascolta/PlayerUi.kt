@@ -94,7 +94,7 @@ fun MainActivity.openPlayer() {
 
     // pulsanti
     val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(0, dp(10), 0, dp(4)) }
-    body.addView(chips)
+    body.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(chips) })
     // volume
     val am = getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
     val vol = SeekBar(this).apply {
@@ -117,7 +117,7 @@ fun MainActivity.openPlayer() {
     heart.setOnClickListener { station()?.let { s -> val on = repo.toggleFavorite(s); toast(if (on) "⭐ Radio preferita" else "Tolta dai preferiti"); updateHeart(); refreshRadio?.invoke(); refreshHome?.invoke() } }
 
     fun pill(text: String, f: () -> Unit) = TextView(this).apply {
-        this.text = text; textSize = 14f; setTextColor(white); setTypeface(typeface, android.graphics.Typeface.BOLD); background = roundBg(0x40FFFFFF, 20); setPadding(dp(16), dp(10), dp(16), dp(10)); setOnClickListener { f() }
+        this.text = text; textSize = 13.5f; maxLines = 1; isSingleLine = true; setTextColor(white); setTypeface(typeface, android.graphics.Typeface.BOLD); background = roundBg(0x40FFFFFF, 20); setPadding(dp(14), dp(10), dp(14), dp(10)); setOnClickListener { f() }
         layoutParams = LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(4); marginEnd = dp(4) }
     }
     fun buildChips() {
@@ -133,7 +133,7 @@ fun MainActivity.openPlayer() {
                     buildChips()
                 }.show()
             })
-        } else chips.addView(pill(if (showLyrics) "📝 Testo" else "📝 Testo (nascosto)") { showLyrics = !showLyrics; lyricsBox.visibility = if (showLyrics && lyricsLoaded) View.VISIBLE else View.GONE; buildChips() })
+        } else chips.addView(pill(if (showLyrics) "📝 Testo ✓" else "📝 Testo") { showLyrics = !showLyrics; lyricsBox.visibility = if (showLyrics && lyricsLoaded) View.VISIBLE else View.GONE; buildChips() })
         chips.addView(pill(if (sleepAt > 0) "⏲ ${((sleepAt - System.currentTimeMillis()) / 60000 + 1)} min" else "⏲ Timer") {
             val opts = mutableListOf("15 minuti" to 15, "30 minuti" to 30, "45 minuti" to 45, "1 ora" to 60, "1 ora e mezza" to 90)
             val dur = ctl?.duration ?: C.TIME_UNSET
