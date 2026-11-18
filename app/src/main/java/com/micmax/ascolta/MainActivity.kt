@@ -138,15 +138,30 @@ class MainActivity : AppCompatActivity() {
 
     // ======================= schermate =======================
 
+    /** Le schermate si appoggiano sopra la prima, che resta sempre attaccata sotto: così la pagina di
+     *  YouTube Music non viene mai staccata (staccandola, il telefono ferma la musica). */
+    private fun cover(v: View) {
+        if (v.background == null) v.setBackgroundColor(col(R.color.bg))
+        v.isClickable = true   // i tocchi non passano alla schermata di sotto
+    }
+
     fun push(s: Scr) {
         stack += s
-        host.removeAllViews(); host.addView(s.view, FrameLayout.LayoutParams(-1, -1)); chrome()
+        if (stack.size == 1) { host.removeAllViews(); host.addView(s.view, FrameLayout.LayoutParams(-1, -1)) }
+        else {
+            while (host.childCount > 1) host.removeViewAt(host.childCount - 1)
+            (s.view.parent as? android.view.ViewGroup)?.removeView(s.view)
+            cover(s.view); host.addView(s.view, FrameLayout.LayoutParams(-1, -1))
+        }
+        chrome()
     }
 
     fun pop() {
         if (stack.size <= 1) return
         stack.removeLast().onClose?.invoke()
-        host.removeAllViews(); host.addView(stack.last().view, FrameLayout.LayoutParams(-1, -1)); chrome()
+        while (host.childCount > 1) host.removeViewAt(host.childCount - 1)
+        if (stack.size > 1) { val v = stack.last().view; (v.parent as? android.view.ViewGroup)?.removeView(v); cover(v); host.addView(v, FrameLayout.LayoutParams(-1, -1)) }
+        chrome()
         stack.last().refresh?.invoke()
     }
 
@@ -249,9 +264,9 @@ class MainActivity : AppCompatActivity() {
         }
         val v = tabViews[i] ?: when (i) { 0 -> buildHomeTab(); 1 -> buildMusicTab(); 2 -> buildPodcastTab(); else -> buildRadioTab() }.also { tabViews[i] = it }
         val base = stack.firstOrNull()?.view as? FrameLayout ?: return
-        base.removeAllViews()
-        (v.parent as? android.view.ViewGroup)?.removeView(v)
-        base.addView(v, FrameLayout.LayoutParams(-1, -1))
+        // le schede già aperte restano attaccate (una sopra l'altra): la Musica non si stacca mai
+        if (v.parent !== base) { (v.parent as? android.view.ViewGroup)?.removeView(v); base.addView(v, FrameLayout.LayoutParams(-1, -1)) }
+        cover(v); v.bringToFront(); base.requestLayout(); base.invalidate()
         stack.first().refresh?.invoke()
     }
 
