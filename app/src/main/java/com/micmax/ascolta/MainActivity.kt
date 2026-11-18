@@ -47,7 +47,8 @@ class MainActivity : AppCompatActivity() {
     val stack = ArrayList<Scr>()
     private val tabViews = arrayOfNulls<View>(4)
     var tab = 0
-    private val tabLabels = listOf("🏠 Per te", "🎵 Musica", "🎙 Podcast", "📻 Radio")
+    private val tabLabels = listOf("Per te", "Musica", "Podcast", "Radio")
+    private val tabIcons = listOf(R.drawable.ic_tab_home, R.drawable.ic_tab_music, R.drawable.ic_tab_mic, R.drawable.ic_tab_radio)
 
     fun toast(m: String) = Toast.makeText(this, m, Toast.LENGTH_SHORT).show()
 
@@ -187,7 +188,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var miniArt: ImageView
     private lateinit var miniTitle: TextView
     private lateinit var miniSub: TextView
-    private lateinit var miniPlay: TextView
+    private lateinit var miniPlay: ImageView
 
     /** Titolo, sottotitolo e copertina di quello che suona. */
     fun nowInfo(): Triple<String, String, String?>? = when (active) {
@@ -204,7 +205,7 @@ class MainActivity : AppCompatActivity() {
         if (info == null) return
         miniTitle.text = info.first.ifBlank { "In riproduzione" }
         miniSub.text = info.second + if (sleepAt > 0) " · 😴" else ""
-        miniPlay.text = if (isPlayingNow()) "⏸" else "▶"
+        miniPlay.setImageResource(if (isPlayingNow()) R.drawable.ic_pause else R.drawable.ic_play)
         if (info.third != null) Img.load(info.third!!, miniArt) else miniArt.setImageDrawable(null)
     }
 
@@ -223,13 +224,15 @@ class MainActivity : AppCompatActivity() {
         miniSub = TextView(this).apply { textSize = 12f; setTextColor(0xFFB9C3D8.toInt()); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }
         txt.addView(miniTitle); txt.addView(miniSub)
         mini.addView(txt, LinearLayout.LayoutParams(0, -2, 1f))
-        miniPlay = TextView(this).apply { textSize = 26f; gravity = Gravity.CENTER; setTextColor(android.graphics.Color.WHITE); contentDescription = "Avvia o ferma"; setOnClickListener { togglePlay() } }
-        mini.addView(miniPlay, LinearLayout.LayoutParams(dp(52), dp(44)))
+        miniPlay = ImageView(this).apply { setColorFilter(0xFF1D2A44.toInt()); setPadding(dp(8), dp(8), dp(8), dp(8)); background = roundBg(android.graphics.Color.WHITE, 22); contentDescription = "Avvia o ferma"; setOnClickListener { togglePlay() } }
+        mini.addView(miniPlay, LinearLayout.LayoutParams(dp(44), dp(44)))
         outer.addView(mini, LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(8), dp(4), dp(8), dp(4)) })
         tabBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setBackgroundColor(col(R.color.card)); setPadding(dp(4), dp(2), dp(4), dp(2)) }
         tabLabels.forEachIndexed { i, t ->
-            tabBar.addView(TextView(this).apply {
-                text = t; textSize = 13f; gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(12)); tag = i
+            tabBar.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(0, dp(8), 0, dp(8)); tag = i
+                addView(ImageView(this@MainActivity).apply { setImageResource(tabIcons[i]) }, LinearLayout.LayoutParams(dp(56), dp(30)).apply { gravity = Gravity.CENTER_HORIZONTAL })
+                addView(TextView(this@MainActivity).apply { text = t; textSize = 11.5f; gravity = Gravity.CENTER; setPadding(0, dp(2), 0, 0) })
                 setOnClickListener { showTab(i) }
             }, LinearLayout.LayoutParams(0, -2, 1f))
         }
@@ -239,8 +242,10 @@ class MainActivity : AppCompatActivity() {
 
     fun showTab(i: Int) {
         tab = i
-        for (k in 0 until tabBar.childCount) (tabBar.getChildAt(k) as TextView).apply {
-            val on = k == i; setTextColor(if (on) col(R.color.accent) else col(R.color.muted)); setTypeface(null, if (on) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        for (k in 0 until tabBar.childCount) (tabBar.getChildAt(k) as LinearLayout).apply {
+            val on = k == i
+            (getChildAt(0) as ImageView).apply { setColorFilter(if (on) col(R.color.accent) else col(R.color.muted)); background = if (on) roundBg(col(R.color.icbg), 16) else null }
+            (getChildAt(1) as TextView).apply { setTextColor(if (on) col(R.color.accent) else col(R.color.muted)); setTypeface(null, if (on) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL) }
         }
         val v = tabViews[i] ?: when (i) { 0 -> buildHomeTab(); 1 -> buildMusicTab(); 2 -> buildPodcastTab(); else -> buildRadioTab() }.also { tabViews[i] = it }
         val base = stack.firstOrNull()?.view as? FrameLayout ?: return
