@@ -43,24 +43,49 @@ fun episodeSub(c: android.content.Context, e: Episode) = listOf(e.podcastTitle, 
 
 // ======================= Per te =======================
 
+/** Un grande riquadro bianco: icona a sinistra, titolo, riga piccola, freccia. */
+private fun MainActivity.bigCard(parent: LinearLayout, emoji: String, title: String, sub: String, onClick: () -> Unit) {
+    val r = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; background = roundBg(col(R.color.card), 26, col(R.color.stroke)); setPadding(dp(20), dp(18), dp(20), dp(18))
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) }; isClickable = true; setOnClickListener { onClick() }
+    }
+    r.addView(TextView(this).apply { text = emoji; textSize = 36f; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(64), -2))
+    val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    col.addView(TextView(this).apply { text = title; textSize = 21f; setTypeface(typeface, android.graphics.Typeface.BOLD); setTextColor(col(R.color.text)) })
+    col.addView(TextView(this).apply { text = sub; textSize = 14.5f; setTextColor(col(R.color.muted)) })
+    r.addView(col, LinearLayout.LayoutParams(0, -2, 1f))
+    r.addView(TextView(this).apply { text = "›"; textSize = 28f; setTextColor(col(R.color.muted)) })
+    parent.addView(r)
+}
+
 fun MainActivity.buildHomeTab(): View {
     val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(col(R.color.bg)) }
     root.addView(tabHeader("Ascolta", "⏰" to { openRadioAlarm() }, "⚙️" to { openSettings() }))
-    val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(4), dp(12), dp(16)) }
+    val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(6), dp(14), dp(16)) }
     root.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
     fun render() {
         body.removeAllViews()
+        bigCard(body, "🎙️", "Podcast", "Cerca e segui i tuoi podcast") { showTab(2) }
+        bigCard(body, "📻", "Radio", "Le radio italiane in diretta") { showTab(3) }
+        bigCard(body, "🎵", "Musica", "YouTube Music, qui dentro") { showTab(1) }
+        body.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; background = roundBg(col(R.color.card), 26, col(R.color.stroke)); setPadding(dp(20), dp(16), dp(20), dp(16))
+            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) }; isClickable = true; setOnClickListener { openPodcastSearch() }
+            addView(TextView(this@buildHomeTab).apply { text = "🔎  Cerca un podcast"; textSize = 17f; setTextColor(col(R.color.muted)) }, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(TextView(this@buildHomeTab).apply { text = "›"; textSize = 24f; setTextColor(col(R.color.muted)) })
+        })
         val recent = AudioStore.recent(this).take(4)
-        sectionLabel(body, "CONTINUA")
-        if (recent.isEmpty() && lastStation() == null) hintLabel(body, "Qui trovi quello che stavi ascoltando. Cerca un podcast, una radio o apri la musica.")
-        recent.forEach { e -> listRow(body, "🎙", e.title, episodeSub(this, e)) { playEpisode(e) } }
-        lastStation()?.let { s -> listRow(body, "📻", s.name, "Ultima radio ascoltata") { playStation(s) } }
+        val last = lastStation()
         val q = AudioQueue.list(this)
+        if (recent.isNotEmpty() || last != null || q.isNotEmpty()) sectionLabel(body, "CONTINUA")
+        recent.forEach { e -> listRow(body, "🎙", e.title, episodeSub(this, e)) { playEpisode(e) } }
+        last?.let { s -> listRow(body, "📻", s.name, "Ultima radio ascoltata") { playStation(s) } }
         if (q.isNotEmpty()) listRow(body, "📋", "Coda · ${q.size}", "Si ascoltano una dopo l'altra") { openQueue() }
         val eps = repo.cachedEpisodes().filter { !AudioStore.isFinished(this, it.id) }.take(8)
-        sectionLabel(body, "NUOVE PUNTATE")
-        if (eps.isEmpty()) hintLabel(body, if (repo.subscriptions().isEmpty()) "Segui un podcast nella scheda Podcast: le puntate nuove compaiono qui." else "Nessuna puntata nuova. Tira giù «Aggiorna» qui sotto.")
-        eps.forEach { e -> listRow(body, "🎙", e.title, episodeSub(this, e), { episodeMenu(e) }) { playEpisode(e) } }
+        if (eps.isNotEmpty()) {
+            sectionLabel(body, "NUOVE PUNTATE")
+            eps.forEach { e -> listRow(body, "🎙", e.title, episodeSub(this, e), { episodeMenu(e) }) { playEpisode(e) } }
+        }
         if (repo.subscriptions().isNotEmpty()) listRow(body, "🔄", "Aggiorna le puntate", "Cerca le novità dei podcast che segui") {
             toast("Cerco le novità…"); io.execute { repo.refreshEpisodes(); runOnUiThread { render() } }
         }
@@ -76,7 +101,7 @@ fun MainActivity.buildHomeTab(): View {
     return root
 }
 
-private fun MainActivity.lastStation(): RadioStation? = runCatching {
+internal fun MainActivity.lastStation(): RadioStation? = runCatching {
     com.google.gson.Gson().fromJson(getSharedPreferences("ascolta", android.content.Context.MODE_PRIVATE).getString("last_station", null), RadioStation::class.java)
 }.getOrNull()
 
