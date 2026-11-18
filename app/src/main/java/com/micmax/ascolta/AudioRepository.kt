@@ -121,6 +121,30 @@ class AudioRepository(private val context: Context) {
         }
     }
 
+    /** Blocking. The most listened podcasts of a category in Italy (Apple charts); if the charts don't answer, a search by [fallbackTerm]. */
+    fun topByGenre(genreId: Int, fallbackTerm: String): List<Podcast> {
+        runCatching {
+            val feed = org.json.JSONObject(String(download("https://itunes.apple.com/it/rss/toppodcasts/limit=50/genre=$genreId/json"), Charsets.UTF_8)).getJSONObject("feed")
+            val entries = feed.optJSONArray("entry")
+            val ids = if (entries == null) emptyList() else (0 until entries.length()).mapNotNull { i ->
+                entries.optJSONObject(i)?.optJSONObject("id")?.optJSONObject("attributes")?.optString("im:id")?.takeIf { it.isNotBlank() }
+            }
+            if (ids.isNotEmpty()) {
+                val arr = org.json.JSONObject(String(download("https://itunes.apple.com/lookup?country=it&entity=podcast&id=" + ids.joinToString(",")), Charsets.UTF_8)).optJSONArray("results")
+                val byId = HashMap<String, Podcast>()
+                if (arr != null) for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    val feedUrl = o.optString("feedUrl").takeIf { it.startsWith("http") } ?: continue
+                    byId[o.optLong("collectionId").toString()] = Podcast(feedUrl, o.optString("collectionName"), o.optString("artistName"),
+                        o.optString("artworkUrl600").ifBlank { o.optString("artworkUrl100") }.takeIf { it.startsWith("http") })
+                }
+                val list = ids.mapNotNull { byId[it] }
+                if (list.isNotEmpty()) return list
+            }
+        }
+        return search(fallbackTerm)
+    }
+
     /** Blocking. Parses a podcast RSS feed. */
     fun episodes(feedUrl: String): List<Episode> {
         val bytes = download(feedUrl)
@@ -295,6 +319,15 @@ class AudioRepository(private val context: Context) {
     }
 
     companion object {
+        /** Categorie dei podcast: (emoji, nome, codice Apple, parola per la ricerca di riserva). */
+        val CATEGORIES = listOf(
+            Triple("📰", "Notizie", 1489 to "notizie"), Triple("🏛", "Storia", 1487 to "storia"), Triple("🔎", "True crime", 1488 to "true crime"),
+            Triple("🎭", "Società e cultura", 1324 to "cultura"), Triple("😂", "Comicità", 1303 to "comicità"), Triple("🔬", "Scienza", 1533 to "scienza"),
+            Triple("💻", "Tecnologia", 1318 to "tecnologia"), Triple("💼", "Economia", 1321 to "economia"), Triple("⚽", "Sport", 1545 to "sport"),
+            Triple("🧘", "Salute e benessere", 1512 to "salute benessere"), Triple("🎓", "Formazione", 1304 to "imparare"), Triple("🎨", "Arte", 1301 to "arte"),
+            Triple("🎵", "Musica", 1310 to "musica"), Triple("🧸", "Bambini e famiglia", 1305 to "bambini"), Triple("📖", "Racconti", 1483 to "racconti"),
+            Triple("🎬", "Cinema e TV", 1309 to "cinema"), Triple("🍝", "Tempo libero", 1502 to "hobby"), Triple("🙏", "Spiritualità", 1314 to "spiritualità")
+        )
         private val RADIO_HOSTS = listOf("de1.api.radio-browser.info", "de2.api.radio-browser.info", "nl1.api.radio-browser.info", "at1.api.radio-browser.info")
         /** Region name -> names used in the Radio Browser catalogue (Italian and English). */
         val REGIONS = listOf(

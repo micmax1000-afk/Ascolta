@@ -268,6 +268,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         AppCompatDelegate.setDefaultNightMode(themeMode())
         super.onCreate(savedInstanceState)
+        if (android.os.Build.VERSION.SDK_INT >= 29) window.decorView.isForceDarkAllowed = false
         setContentView(buildChrome())
         val base = Scr(FrameLayout(this))
         base.refresh = { when (tab) { 0 -> refreshHome?.invoke(); 2 -> refreshPodcasts?.invoke(); 3 -> refreshRadio?.invoke() } }
@@ -303,7 +304,23 @@ class MainActivity : AppCompatActivity() {
         if (s.playing && !was) { active = "web"; ctl?.pause(); AudioStore.setLast(this, "music") }
         if (active == null && s.has) active = "web"
         updateMini(); onPlayerTick?.invoke()
-    }, { url -> runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }, { updateMini() }).also { musicWeb = it }
+    }, { url -> runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }, { updateMini() }).also { musicWeb = it; fixDayNight() }
+
+    /** Creating a WebView resets the screen to the phone's theme (a known Android bug): this puts back the theme chosen in the app,
+     *  otherwise with the light theme on a dark phone the cards drawn afterwards come out dark. */
+    fun fixDayNight() {
+        val want = when (themeChoice()) { 1 -> android.content.res.Configuration.UI_MODE_NIGHT_NO; 2 -> android.content.res.Configuration.UI_MODE_NIGHT_YES; else -> return }
+        val mask = android.content.res.Configuration.UI_MODE_NIGHT_MASK
+        for (res in listOf(resources, applicationContext.resources)) {
+            val cfg = android.content.res.Configuration(res.configuration)
+            if (cfg.uiMode and mask != want) {
+                cfg.uiMode = (cfg.uiMode and mask.inv()) or want
+                @Suppress("DEPRECATION") res.updateConfiguration(cfg, res.displayMetrics)
+            }
+        }
+    }
+
+    override fun onResume() { super.onResume(); fixDayNight() }
 
     fun openUrl(url: String) { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.onFailure { toast("Non riesco ad aprire il link") } }
 
