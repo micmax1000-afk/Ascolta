@@ -248,7 +248,7 @@ fun MainActivity.openRadioAlarm() {
             listRow(body, "📅", if (wd) "Solo nei giorni feriali" else "Tutti i giorni", "Tocca per cambiare") { RadioAlarm.set(this, on, h, m, !wd, st); render() }
             listRow(body, "📻", st?.name ?: "Scegli la radio", if (st == null) "Una delle tue preferite" else "Tocca per cambiarla") {
                 val favs = repo.favoriteStations()
-                if (favs.isEmpty()) { toast("Metti prima una radio tra le preferite (tienila premuta nella scheda Radio)"); return@listRow }
+                if (favs.isEmpty()) { toast("Metti prima una radio tra le preferite (la stellina ☆ nella scheda Radio)"); return@listRow }
                 MaterialAlertDialogBuilder(this).setTitle("Radio").setItems(favs.map { it.name }.toTypedArray()) { _, w -> RadioAlarm.set(this, on, h, m, wd, favs[w]); render() }.show()
             }
         }

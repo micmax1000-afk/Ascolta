@@ -26,10 +26,10 @@ private fun MainActivity.tabScroll(build: (LinearLayout) -> Unit): Pair<View, Li
     return root to body
 }
 
-private fun MainActivity.tabHeader(title: String, vararg actions: Pair<String, () -> Unit>): LinearLayout = LinearLayout(this).apply {
+private fun MainActivity.tabHeader(title: String, vararg actions: Triple<String, String, () -> Unit>): LinearLayout = LinearLayout(this).apply {
     orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(8), dp(8), dp(4))
     addView(TextView(this@tabHeader).apply { text = title; textSize = 22f; setTypeface(typeface, android.graphics.Typeface.BOLD); setTextColor(col(R.color.text)) }, LinearLayout.LayoutParams(0, -2, 1f))
-    actions.forEach { (t, f) -> addView(TextView(this@tabHeader).apply { text = t; textSize = 22f; gravity = Gravity.CENTER; setOnClickListener { f() } }, LinearLayout.LayoutParams(dp(46), dp(44))) }
+    actions.forEach { (t, label, f) -> addView(TextView(this@tabHeader).apply { text = t; textSize = 22f; gravity = Gravity.CENTER; contentDescription = label; setOnClickListener { f() } }, LinearLayout.LayoutParams(dp(48), dp(48))) }
 }
 
 private fun minutesLeft(c: android.content.Context, e: Episode): String {
@@ -60,31 +60,42 @@ private fun MainActivity.bigCard(parent: LinearLayout, emoji: String, title: Str
 
 fun MainActivity.buildHomeTab(): View {
     val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(col(R.color.bg)) }
-    root.addView(tabHeader("Ascolta", "⏰" to { openRadioAlarm() }, "⚙️" to { openSettings() }))
+    root.addView(tabHeader("Ascolta", Triple("⏰", "Sveglia con la radio") { openRadioAlarm() }, Triple("⚙️", "Impostazioni") { openSettings() }))
     val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(6), dp(14), dp(16)) }
     root.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
     fun render() {
         body.removeAllViews()
-        bigCard(body, "🎙️", "Podcast", "Cerca e segui i tuoi podcast") { showTab(2) }
-        bigCard(body, "📻", "Radio", "Le radio italiane in diretta") { showTab(3) }
-        bigCard(body, "🎵", "Musica", "YouTube Music, qui dentro") { showTab(1) }
+        val recent = AudioStore.recent(this).take(4)
+        val last = lastStation()
+        val q = AudioQueue.list(this)
+        val hasHistory = recent.isNotEmpty() || last != null || q.isNotEmpty()
+        // la prima volta: i tre riquadri grandi spiegano cosa c'è; dopo, quello che stavi ascoltando sta in cima
+        if (!hasHistory) {
+            bigCard(body, "🎙️", "Podcast", "Cerca e segui i tuoi podcast") { showTab(2) }
+            bigCard(body, "📻", "Radio", "Le radio italiane in diretta") { showTab(3) }
+            bigCard(body, "🎵", "Musica", "YouTube Music, qui dentro") { showTab(1) }
+        } else {
+            sectionLabel(body, "CONTINUA")
+            recent.forEach { e -> listRow(body, "🎙", e.title, episodeSub(this, e), { episodeMenu(e) }, { episodeMenu(e) }, image = e.artwork, actionIcon = "⋮", actionLabel = "Altre azioni") { playEpisode(e) } }
+            last?.let { s -> listRow(body, "📻", s.name, "Ultima radio ascoltata", image = s.favicon) { playStation(s) } }
+            if (q.isNotEmpty()) listRow(body, "📋", "Coda · ${q.size}", "Si ascoltano una dopo l'altra") { openQueue() }
+            body.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(8), 0, dp(4))
+                listOf(Triple("🎙️", "Podcast", 2), Triple("📻", "Radio", 3), Triple("🎵", "Musica", 1)).forEach { (em, t, i) ->
+                    addView(bigButton(em, t, false) { showTab(i) }, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(4), 0, dp(4), 0) })
+                }
+            })
+        }
         body.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; background = roundBg(col(R.color.card), 26, col(R.color.stroke)); setPadding(dp(20), dp(16), dp(20), dp(16))
             layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) }; isClickable = true; setOnClickListener { openPodcastSearch() }
             addView(TextView(this@buildHomeTab).apply { text = "🔎  Cerca un podcast"; textSize = 17f; setTextColor(col(R.color.muted)) }, LinearLayout.LayoutParams(0, -2, 1f))
             addView(TextView(this@buildHomeTab).apply { text = "›"; textSize = 24f; setTextColor(col(R.color.muted)) })
         })
-        val recent = AudioStore.recent(this).take(4)
-        val last = lastStation()
-        val q = AudioQueue.list(this)
-        if (recent.isNotEmpty() || last != null || q.isNotEmpty()) sectionLabel(body, "CONTINUA")
-        recent.forEach { e -> listRow(body, "🎙", e.title, episodeSub(this, e), image = e.artwork) { playEpisode(e) } }
-        last?.let { s -> listRow(body, "📻", s.name, "Ultima radio ascoltata", image = s.favicon) { playStation(s) } }
-        if (q.isNotEmpty()) listRow(body, "📋", "Coda · ${q.size}", "Si ascoltano una dopo l'altra") { openQueue() }
         val eps = repo.cachedEpisodes().filter { !AudioStore.isFinished(this, it.id) }.take(8)
         if (eps.isNotEmpty()) {
             sectionLabel(body, "NUOVE PUNTATE")
-            eps.forEach { e -> listRow(body, "🎙", e.title, episodeSub(this, e), { episodeMenu(e) }, image = e.artwork) { playEpisode(e) } }
+            eps.forEach { e -> listRow(body, "🎙", e.title, episodeSub(this, e), { episodeMenu(e) }, { episodeMenu(e) }, image = e.artwork, actionIcon = "⋮", actionLabel = "Altre azioni") { playEpisode(e) } }
         }
         if (repo.subscriptions().isNotEmpty()) listRow(body, "🔄", "Aggiorna le puntate", "Cerca le novità dei podcast che segui") {
             toast("Cerco le novità…"); io.execute { repo.refreshEpisodes(); runOnUiThread { render() } }
@@ -126,7 +137,7 @@ fun MainActivity.buildMusicTab(): View {
     val w = musicWebView()
     (w.parent as? android.view.ViewGroup)?.removeView(w)
     root.addView(chipBar(listOf(
-        "‹" to { if (w.canGoBack()) w.goBack() }, "⟳" to { w.reload() }, "🏠" to { w.loadUrl(YT_MUSIC_HOME) },
+        "‹ Indietro" to { if (w.canGoBack()) w.goBack() }, "🏠 Inizio" to { w.loadUrl(YT_MUSIC_HOME) }, "⟳ Ricarica" to { w.reload() },
         "⛶ Lettore" to { if (nowInfo() != null) openPlayer() else toast("Fai partire prima una canzone") }
     )))
     root.addView(w, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -137,7 +148,7 @@ fun MainActivity.buildMusicTab(): View {
 
 fun MainActivity.buildPodcastTab(): View {
     val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(col(R.color.bg)) }
-    root.addView(tabHeader("Podcast", "🔍" to { openPodcastSearch() }))
+    root.addView(tabHeader("Podcast", Triple("🔍", "Cerca un podcast") { openPodcastSearch() }))
     val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(4), dp(12), dp(16)) }
     root.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
     fun render() {
@@ -224,9 +235,9 @@ fun MainActivity.openPodcast(p: Podcast) {
             sectionLabel(body, "PUNTATE")
             eps.take(40).forEach { e ->
                 val d = if (repo.isDownloaded(e)) "⬇ " else ""
-                listRow(body, if (AudioStore.isFinished(this, e.id)) "✓" else "🎙", e.title, d + episodeSub(this, e).removePrefix(e.podcastTitle + " · "), { episodeMenu(e) }, image = e.artwork ?: p.artwork) { playEpisode(e) }
+                listRow(body, if (AudioStore.isFinished(this, e.id)) "✓" else "🎙", e.title, d + episodeSub(this, e).removePrefix(e.podcastTitle + " · "), { episodeMenu(e) }, { episodeMenu(e) }, image = e.artwork ?: p.artwork, actionIcon = "⋮", actionLabel = "Altre azioni") { playEpisode(e) }
             }
-            hintLabel(body, "Tieni premuta una puntata per ascoltarla dopo, scaricarla o segnarla come ascoltata.")
+            hintLabel(body, "Tocca ⋮ su una puntata per ascoltarla dopo, scaricarla o segnarla come ascoltata.")
         }
         scr.refresh = { render(repo.cachedEpisodes().filter { it.feedUrl == p.feedUrl }.ifEmpty { null }) }
         render(null)
@@ -236,11 +247,9 @@ fun MainActivity.openPodcast(p: Podcast) {
 
 fun MainActivity.openPodcastSearch() {
     openScreen("Cerca un podcast") { body, _ ->
-        val et = field("Nome o argomento", null).apply { setSingleLine(); imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH }
         val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        body.addView(et); body.addView(results)
-        fun search() {
-            val q = et.text.toString().trim(); if (q.length < 2) return
+        fun search(q: String) {
+            if (q.length < 2) { toast("Scrivi almeno due lettere"); return }
             results.removeAllViews(); hintLabel(results, "Cerco…")
             io.execute {
                 val list = runCatching { repo.search(q) }.getOrNull()
@@ -254,8 +263,8 @@ fun MainActivity.openPodcastSearch() {
                 }
             }
         }
-        et.setOnEditorActionListener { _, _, _ -> search(); true }
-        body.addView(MaterialButton(this).apply { text = "Cerca"; isAllCaps = false; setOnClickListener { search() } }, 1 + 0)
+        searchBox(body, "Nome o argomento") { search(it) }
+        body.addView(results)
     }
 }
 
@@ -264,7 +273,7 @@ fun MainActivity.openQueue() {
         fun render() {
             body.removeAllViews()
             val q = AudioQueue.list(this)
-            if (q.isEmpty()) { hintLabel(body, "La coda è vuota. Tieni premuta una puntata e scegli «Ascolta dopo»."); return }
+            if (q.isEmpty()) { hintLabel(body, "La coda è vuota. Tocca ⋮ su una puntata e scegli «Ascolta dopo»."); return }
             q.forEachIndexed { i, e ->
                 listRow(body, "${i + 1}", e.title, e.podcastTitle, { MaterialAlertDialogBuilder(this).setItems(arrayOf("⬆ Sposta su", "⬇ Sposta giù")) { _, w -> AudioQueue.move(this, e.id, w == 0); render() }.show() },
                     { AudioQueue.remove(this, e.id); render() }, image = e.artwork) { AudioQueue.remove(this, e.id); playEpisode(e); render() }
@@ -279,7 +288,7 @@ fun MainActivity.openQueue() {
 
 fun MainActivity.buildRadioTab(): View {
     val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(col(R.color.bg)) }
-    root.addView(tabHeader("Radio", "🔍" to { openStationSearch() }))
+    root.addView(tabHeader("Radio", Triple("🔍", "Cerca una radio") { openStationSearch() }))
     val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(4), dp(12), dp(16)) }
     root.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
     fun render() {
@@ -287,7 +296,7 @@ fun MainActivity.buildRadioTab(): View {
         val favs = repo.favoriteStations()
         if (favs.isNotEmpty()) {
             sectionLabel(body, "PREFERITE")
-            favs.forEach { s -> listRow(body, "⭐", s.name, listOf(s.state, s.tags.split(',').firstOrNull().orEmpty()).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null }, { stationMenu(s) }, image = s.favicon) { playStation(s) } }
+            favs.forEach { s -> stationRow(body, s, listOf(s.state, s.tags.split(',').firstOrNull().orEmpty()).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null }, "⭐") }
         }
         sectionLabel(body, "SCOPRI")
         listRow(body, "🇮🇹", "Le più ascoltate in Italia", null) { openStations("Radio in Italia") { repo.nationalStations() } }
@@ -297,11 +306,36 @@ fun MainActivity.buildRadioTab(): View {
             }.show()
         }
         listRow(body, "🔍", "Cerca una radio", "Per nome") { openStationSearch() }
-        if (favs.isEmpty()) hintLabel(body, "Tieni premuta una radio per metterla tra le preferite.")
+        if (favs.isEmpty()) hintLabel(body, "Tocca ☆ accanto a una radio per metterla tra le preferite.")
     }
     refreshRadio = { render() }
     render()
     return root
+}
+
+/** Una radio nell'elenco: tocca per ascoltarla, la stellina a destra la mette (o la toglie) tra le preferite. */
+private fun MainActivity.stationRow(parent: LinearLayout, s: RadioStation, sub: String?, icon: String = "📻") {
+    val fav = repo.favoriteStations().any { it.id == s.id }
+    var row: LinearLayout? = null
+    row = listRow(parent, icon, s.name, sub, { stationMenu(s) }, {
+        val on = repo.toggleFavorite(s); toast(if (on) "⭐ Tra le preferite" else "Tolta dalle preferite")
+        // la stellina cambia subito anche negli elenchi che non si ridisegnano (ricerca, regioni)
+        (row?.getChildAt(row!!.childCount - 1) as? TextView)?.apply { text = if (on) "★" else "☆"; contentDescription = if (on) "Togli dalle preferite" else "Metti tra le preferite" }
+        refreshTop(); refreshRadio?.invoke(); refreshHome?.invoke()
+    }, image = s.favicon, actionIcon = if (fav) "★" else "☆", actionLabel = if (fav) "Togli dalle preferite" else "Metti tra le preferite") { playStation(s) } as LinearLayout
+}
+
+/** Il campo di ricerca: tasto «Cerca» accanto e tastiera aperta subito. */
+private fun MainActivity.searchBox(body: LinearLayout, hint: String, onSearch: (String) -> Unit): EditText {
+    val et = field(hint, null).apply { setSingleLine(); imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH }
+    val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    row.addView(et, LinearLayout.LayoutParams(0, -2, 1f))
+    row.addView(MaterialButton(this).apply { text = "Cerca"; isAllCaps = false; setOnClickListener { onSearch(et.text.toString().trim()) } }, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(8) })
+    body.addView(row)
+    et.setOnEditorActionListener { _, _, _ -> onSearch(et.text.toString().trim()); true }
+    et.requestFocus()
+    et.postDelayed({ (getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)?.showSoftInput(et, 0) }, 250)
+    return et
 }
 
 fun MainActivity.stationMenu(s: RadioStation) {
@@ -319,8 +353,8 @@ fun MainActivity.openStations(title: String, load: () -> List<RadioStation>) {
             runOnUiThread {
                 body.removeAllViews()
                 if (list.isEmpty()) hintLabel(body, "Non trovo radio: controlla la connessione.")
-                list.forEach { s -> listRow(body, "📻", s.name, listOf(s.state, s.tags.split(',').firstOrNull().orEmpty(), if (s.bitrate > 0) "${s.bitrate} kbps" else "").filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null }, { stationMenu(s) }, image = s.favicon) { playStation(s) } }
-                if (list.isNotEmpty()) hintLabel(body, "Tieni premuta una radio per metterla tra le preferite.")
+                list.forEach { s -> stationRow(body, s, listOf(s.state, s.tags.split(',').firstOrNull().orEmpty(), if (s.bitrate > 0) "${s.bitrate} kbps" else "").filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null }) }
+                if (list.isNotEmpty()) hintLabel(body, "Tocca ☆ accanto a una radio per metterla tra le preferite.")
             }
         }
     }
@@ -328,21 +362,20 @@ fun MainActivity.openStations(title: String, load: () -> List<RadioStation>) {
 
 fun MainActivity.openStationSearch() {
     openScreen("Cerca una radio") { body, _ ->
-        val et = field("Nome della radio", null).apply { setSingleLine(); imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH }
         val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        body.addView(et); body.addView(results)
-        fun search() {
-            val q = et.text.toString().trim(); if (q.length < 2) return
+        fun search(q: String) {
+            if (q.length < 2) { toast("Scrivi almeno due lettere"); return }
             results.removeAllViews(); hintLabel(results, "Cerco…")
             io.execute {
                 val list = runCatching { repo.searchStations(q) }.getOrDefault(emptyList())
                 runOnUiThread {
                     results.removeAllViews()
                     if (list.isEmpty()) hintLabel(results, "Nessuna radio trovata per «$q».")
-                    list.forEach { s -> listRow(results, "📻", s.name, s.state.ifBlank { null }, { stationMenu(s) }, image = s.favicon) { playStation(s) } }
+                    list.forEach { s -> stationRow(results, s, s.state.ifBlank { null }) }
                 }
             }
         }
-        et.setOnEditorActionListener { _, _, _ -> search(); true }
+        searchBox(body, "Nome della radio") { search(it) }
+        body.addView(results)
     }
 }

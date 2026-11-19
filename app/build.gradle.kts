@@ -12,7 +12,7 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = System.getenv("ASCOLTA_VERSION_CODE")?.toIntOrNull() ?: 1
-        versionName = "1.1.3"
+        versionName = "1.1.4"
         resourceConfigurations += listOf("it", "en")
     }
 
