@@ -29,7 +29,7 @@ fun Context.hintLabel(parent: LinearLayout, text: String) {
 }
 
 /** A white card row: round icon, title, small line, tap. */
-fun Context.listRow(parent: LinearLayout, icon: String, title: String, sub: String?, onLong: (() -> Unit)? = null, onRemove: (() -> Unit)? = null, image: String? = null, onClick: () -> Unit): View {
+fun Context.listRow(parent: LinearLayout, icon: String, title: String, sub: String?, onLong: (() -> Unit)? = null, onRemove: (() -> Unit)? = null, image: String? = null, actionIcon: String = "✕", actionLabel: String = "Togli", onClick: () -> Unit): View {
     val r = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         background = roundBg(col(R.color.card), 16, col(R.color.stroke)); setPadding(dp(12), dp(10), dp(12), dp(10))
@@ -46,9 +46,9 @@ fun Context.listRow(parent: LinearLayout, icon: String, title: String, sub: Stri
     if (!sub.isNullOrBlank()) col.addView(TextView(this).apply { text = sub; textSize = 12.5f; setTextColor(col(R.color.muted)) })
     r.addView(col)
     if (onRemove != null) r.addView(TextView(this).apply {
-        text = "✕"; textSize = 18f; gravity = Gravity.CENTER; setTextColor(col(R.color.muted)); contentDescription = "Togli"
+        text = actionIcon; textSize = if (actionIcon == "✕") 18f else 22f; gravity = Gravity.CENTER; setTextColor(col(R.color.muted)); contentDescription = actionLabel
         setOnClickListener { onRemove() }
-    }, LinearLayout.LayoutParams(dp(40), dp(40)))
+    }, LinearLayout.LayoutParams(dp(44), dp(44)))
     parent.addView(r)
     return r
 }

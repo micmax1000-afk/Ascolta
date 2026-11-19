@@ -82,11 +82,21 @@ object MusicWeb {
       v.muted = true;
       try { v.playbackRate = 16; } catch (e) {}
       if (isFinite(v.duration) && v.duration > 0 && v.currentTime < v.duration - 0.3) { try { v.currentTime = v.duration - 0.1; } catch (e) {} }
-      click('.ytp-ad-skip-button,.ytp-ad-skip-button-modern,.ytp-skip-ad-button,button[class*="ad-skip"],ytm-skip-ad-button button');
+      click('.ytp-ad-skip-button,.ytp-ad-skip-button-modern,.ytp-skip-ad-button,.ytp-ad-skip-button-container button,button[class*="ad-skip"],button[class*="skip-ad"],ytm-skip-ad-button button');
     } else if (inAd) {
       inAd = false;
       if (v) { v.muted = savedMuted; try { v.playbackRate = savedRate; } catch (e) {} }
     }
+    return ad;
+  }
+  // appena il lettore segna una pubblicità (o parte un nuovo video) si salta subito, senza aspettare il controllo periodico
+  var watched = null;
+  function watchPlayer() {
+    var p = player(); if (!p || p === watched || !window.MutationObserver) return;
+    watched = p;
+    try { new MutationObserver(function () { try { adCheck(); } catch (e) {} }).observe(p, { attributes: true, attributeFilter: ['class'] }); } catch (e) {}
+    var v = video();
+    if (v) ['loadedmetadata', 'playing', 'durationchange'].forEach(function (ev) { v.addEventListener(ev, function () { try { adCheck(); } catch (e) {} }); });
   }
 
   // «Sei ancora lì?» e inviti a Premium: si chiudono da soli
@@ -139,7 +149,8 @@ object MusicWeb {
     else if (c === 'prev') { click('ytmusic-player-bar .previous-button, .previous-button, button[aria-label*="Precedent"], button[aria-label*="Previous"]'); }
   };
 
-  setInterval(function () { try { adCheck(); nagCheck(); report(); } catch (e) {} }, 1000);
+  // durante la pubblicità non si riferisce lo stato: nel lettore restano titolo e copertina della canzone
+  setInterval(function () { try { watchPlayer(); var ad = adCheck(); nagCheck(); if (!ad) report(); } catch (e) {} }, 500);
 })();
 """.trimIndent()
 }
